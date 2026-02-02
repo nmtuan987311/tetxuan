@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Trình Chiếu</title>
+    <style>
+        :root {
+            --gold: #ffcc00;
+            --mai-gold: #FFD700;
+            --pink-petal: #ffb7c5;
+            --red-deep: #8b0000;
+            --red-bright: #b91c1c;
+            --system-font: "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+        }
+
+        /* CHỐNG COPY */
+        * {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        input, textarea, select {
+            -webkit-user-select: text;
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: var(--system-font);
+            background-color: #f3f4f6;
+            overflow: hidden;
+        }
+
+        /* --- VIEW: DISPLAY --- */
+        .display-screen {
+            background-color: var(--red-deep);
+            background-image: url('background.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            image-rendering: -webkit-optimize-contrast;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            position: relative;
+        }
+
+        #fireworksCanvas {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 2; pointer-events: none;
+        }
+
+        #petalsContainer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 15; pointer-events: none;
+        }
+
+        .marquee-container {
+            background: rgba(0, 0, 0, 0.8);
+            border-top: 6px solid var(--gold);
+            height: 160px;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            white-space: nowrap;
+            z-index: 30;
+        }
+
+        .marquee-content {
+            display: inline-block;
+            padding-left: 100%;
+            font-size: 7rem;
+            font-weight: 900;
+            color: var(--gold);
+        }
+
+        .donor-name {
+            display: inline-block;
+            color: var(--gold);
+            padding: 0 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .separator-wrap {
+            display: inline-flex;
+            align-items: center;
+            margin: 0 40px;
+        }
+
+        .rotating-flower {
+            display: inline-block;
+            animation: spin 4s linear infinite;
+            font-size: 4rem;
+        }
+
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes marquee { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); } }
+
+        /* --- VIEW: CONTROL --- */
+        .control-screen {
+            background: #e5e7eb;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .card {
+            background: white;
+            width: 100%;
+            max-width: 1200px;
+            padding: 25px 40px;
+            border-radius: 30px;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.1);
+            border-top: 15px solid #8b0000;
+            max-height: 95vh;
+            overflow-y: auto;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .title-group h2 {
+            color: #8b0000;
+            margin: 0;
+            font-weight: 800;
+            font-size: 1.6rem;
+            text-transform: uppercase;
+        }
+
+        .input-group-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            background: #f9fafb;
+            padding: 20px;
+            border-radius: 20px;
+            border: 2px dashed #d1d5db;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+
+        .field { display: flex; flex-direction: column; gap: 8px; }
+        
+        .field-config { 
+            flex: 0 0 220px; 
+            border-right: 2px solid #e5e7eb; 
+            padding-right: 15px; 
+            align-items: flex-start;
+        }
+        
+        .field-name { flex: 2; min-width: 200px; }
+        .field-select { flex: 1; min-width: 140px; }
+        .field-custom { flex: 1; min-width: 140px; }
+
+        label { font-weight: 700; color: #374151; font-size: 0.85rem; text-align: left; width: 100%; }
+
+        input, select {
+            padding: 12px 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            font-family: var(--system-font);
+            font-size: 1rem;
+            outline: none;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        input:focus { border-color: #b91c1c; }
+
+        .btn-add {
+            padding: 0 25px;
+            background: #059669;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            height: 48px;
+            font-family: var(--system-font);
+            flex-shrink: 0;
+        }
+
+        .list-container {
+            border: 2px solid #e5e7eb;
+            border-radius: 15px;
+            height: 250px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            background: #fff;
+        }
+
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .item-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-edit {
+            background: #dcfce7;
+            color: #166534;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 700;
+            font-family: var(--system-font);
+        }
+
+        .btn-delete {
+            background: #fee2e2;
+            color: #dc2626;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 700;
+            font-family: var(--system-font);
+        }
+
+        .total-info {
+            background: #fef2f2;
+            padding: 15px 25px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            border: 2px solid #fee2e2;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .total-info span { font-weight: 800; font-size: 1.4rem; color: #b91c1c; }
+
+        .btn-group-main { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+        .btn-large {
+            padding: 18px;
+            border: none;
+            border-radius: 15px;
+            font-size: 1.1rem;
+            font-weight: 800;
+            cursor: pointer;
+            color: white;
+            text-transform: uppercase;
+            transition: all 0.2s;
+            font-family: var(--system-font);
+        }
+
+        .btn-update { background: #b91c1c; box-shadow: 0 5px 0 #8b0000; }
+        .btn-display { background: #f59e0b; box-shadow: 0 5px 0 #d97706; }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modal-card {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            max-width: 400px;
+            width: 90%;
+        }
+        .modal-btns { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+        .btn-confirm { background: #dc2626; color: white; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 700; font-family: var(--system-font); }
+        .btn-cancel { background: #e5e7eb; color: #374151; border: none; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 700; font-family: var(--system-font); }
+
+        .hidden { display: none !important; }
+
+        .option-group { display: flex; flex-direction: column; gap: 4px; }
+        .option-title { font-size: 0.75rem; text-transform: uppercase; color: #9ca3af; font-weight: 800; }
+        .radio-label { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; cursor: pointer; font-weight: 600; color: #4b5563; }
+        .radio-label input { width: auto; margin: 0; cursor: pointer; }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+
+    <!-- Màn hình Trình Chiếu -->
+    <div id="displayView" class="display-screen hidden">
+        <canvas id="fireworksCanvas"></canvas>
+        <div id="petalsContainer"></div>
+        <div class="marquee-container">
+            <div id="marqueeDisplay" class="marquee-content"></div>
+        </div>
+    </div>
+
+    <!-- Màn hình Điều Khiển -->
+    <div id="controlView" class="control-screen">
+        <div class="card">
+            <div class="header-row">
+                <div class="title-group">
+                    <h2>QUẢN LÝ DANH SÁCH</h2>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="exportToExcel()" style="padding:8px 15px; border-radius:10px; border:none; background:#059669; color:white; cursor:pointer; font-family: var(--system-font); font-weight:600;">📊 Xuất Excel</button>
+                    <button onclick="exportData()" style="padding:8px 15px; border-radius:10px; border:none; background:#374151; color:white; cursor:pointer; font-family: var(--system-font); font-weight:600;">💾 Lưu file</button>
+                    <button onclick="importData()" style="padding:8px 15px; border-radius:10px; border:none; background:#374151; color:white; cursor:pointer; font-family: var(--system-font); font-weight:600;">📂 Mở file</button>
+                </div>
+            </div>
+
+            <div class="input-group-row">
+                <div class="field field-config">
+                    <label>Cài đặt hiển thị</label>
+                    <div class="option-group">
+                        <span class="option-title">Kiểu chữ</span>
+                        <label class="radio-label"><input type="radio" name="nameFormat" value="capitalize" checked onchange="refreshFormatting()"> Viết hoa đầu</label>
+                        <label class="radio-label"><input type="radio" name="nameFormat" value="uppercase" onchange="refreshFormatting()"> Viết hoa TOÀN BỘ</label>
+                    </div>
+                    <div class="option-group" style="margin-top:10px;">
+                        <span class="option-title">Thứ tự chiếu</span>
+                        <label class="radio-label"><input type="radio" name="displayOrder" value="normal" checked onchange="refreshFormatting()"> Xuôi</label>
+                        <label class="radio-label"><input type="radio" name="displayOrder" value="reverse" onchange="refreshFormatting()"> Ngược</label>
+                    </div>
+                </div>
+                
+                <div class="field field-name">
+                    <label>Tên Mạnh Thường Quân</label>
+                    <input type="text" id="nameInput" placeholder="Họ tên..." onkeydown="if(event.key === 'Enter') addItem()">
+                </div>
+                
+                <div class="field field-select">
+                    <label>Số tiền (List)</label>
+                    <select id="amountSelect" onchange="toggleCustomInput()">
+                        <option value="500,000đ" selected>500,000đ</option>
+                        <option value="CUSTOM">Số khác</option>
+                        <option value="50,000đ">50,000đ</option>
+                        <option value="100,000đ">100,000đ</option>
+                        <option value="200,000đ">200,000đ</option>
+                        <option value="1,000,000đ">1,000,000đ</option>
+                        <option value="2,000,000đ">2,000,000đ</option>
+                        <option value="5,000,000đ">5,000,000đ</option>
+                    </select>
+                </div>
+                
+                <div class="field field-custom">
+                    <label>Số tiền khác</label>
+                    <input type="text" id="customAmount" placeholder="Nhập số..." disabled oninput="handleCustomAmountInput(this)">
+                </div>
+                
+                <button onclick="addItem()" class="btn-add">THÊM/LƯU</button>
+            </div>
+
+            <div id="donorList" class="list-container"></div>
+
+            <div class="total-info">
+                <label style="font-size: 1.1rem;">TỔNG CỘNG ĐÃ ỦNG HỘ:</label>
+                <span id="totalAmountDisplay">0đ</span>
+            </div>
+
+            <div class="btn-group-main">
+                <button onclick="sendUpdate()" class="btn-large btn-update">🚀 CẬP NHẬT</button>
+                <button onclick="openDisplayTab()" class="btn-large btn-display">📺 TRÌNH CHIẾU</button>
+            </div>
+
+            <input type="file" id="fileImport" class="hidden" accept=".txt">
+        </div>
+    </div>
+
+    <!-- Modal Xác nhận xóa -->
+    <div id="confirmModal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <h3>Xác nhận xóa?</h3>
+            <p id="confirmMessage">Bạn có chắc chắn muốn xóa mục này không?</p>
+            <div class="modal-btns">
+                <button id="btnConfirmDelete" class="btn-confirm">XÓA</button>
+                <button onclick="closeModal()" class="btn-cancel">HỦY</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'tet_final_config';
+        const FORMAT_KEY = 'tet_name_format';
+        const ORDER_KEY = 'tet_display_order';
+        let donorData = []; 
+        let deleteIndexTemp = null;
+
+        function toTitleCase(str) {
+            return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        }
+
+        function formatName(name, overrideFormat = null) {
+            let format = overrideFormat || document.querySelector('input[name="nameFormat"]:checked').value;
+            return (format === 'uppercase') ? name.toUpperCase() : toTitleCase(name);
+        }
+
+        function formatWithCommas(value) {
+            let number = value.toString().replace(/\D/g, '');
+            return number ? parseInt(number).toLocaleString('en-US') : "";
+        }
+
+        function handleCustomAmountInput(input) {
+            input.value = formatWithCommas(input.value);
+        }
+
+        function toggleCustomInput() {
+            const select = document.getElementById('amountSelect');
+            const custom = document.getElementById('customAmount');
+            custom.disabled = select.value !== "CUSTOM";
+            if (!custom.disabled) custom.focus();
+        }
+
+        function calculateTotal() {
+            let total = 0;
+            donorData.forEach(item => {
+                const parts = item.split(' - ');
+                if (parts.length > 1) total += parseInt(parts[1].replace(/\D/g, '')) || 0;
+            });
+            document.getElementById('totalAmountDisplay').innerText = total.toLocaleString('en-US') + 'đ';
+        }
+
+        function addItem() {
+            const nameField = document.getElementById('nameInput');
+            const name = nameField.value.trim();
+            const selectValue = document.getElementById('amountSelect').value;
+            const customField = document.getElementById('customAmount');
+            const customValue = customField.value.trim();
+
+            if (!name) { nameField.focus(); return; }
+            let amountText = (selectValue === "CUSTOM") ? (customValue ? customValue + "đ" : null) : selectValue;
+            if (!amountText) { customField.focus(); return; }
+
+            donorData.push(`${name} - ${amountText}`);
+            renderList();
+            calculateTotal();
+            nameField.value = ""; customField.value = "";
+            nameField.focus();
+        }
+
+        function editItem(index) {
+            const item = donorData[index];
+            const parts = item.split(' - ');
+            const name = parts[0];
+            const amount = parts[1];
+
+            // Đưa dữ liệu lên ô nhập
+            document.getElementById('nameInput').value = name;
+            
+            const select = document.getElementById('amountSelect');
+            const custom = document.getElementById('customAmount');
+            
+            // Kiểm tra xem số tiền có trong list không
+            let found = false;
+            for(let i=0; i<select.options.length; i++) {
+                if(select.options[i].value === amount) {
+                    select.selectedIndex = i;
+                    found = true;
+                    break;
+                }
+            }
+
+            if(!found) {
+                select.value = "CUSTOM";
+                custom.disabled = false;
+                custom.value = amount.replace('đ', '');
+            } else {
+                custom.disabled = true;
+                custom.value = "";
+            }
+
+            // Xóa mục cũ để chuẩn bị lưu đè
+            donorData.splice(index, 1);
+            renderList();
+            calculateTotal();
+            document.getElementById('nameInput').focus();
+        }
+
+        function renderList() {
+            const container = document.getElementById('donorList');
+            container.innerHTML = donorData.map((item, index) => {
+                const parts = item.split(' - ');
+                return `
+                <div class="list-item">
+                    <span><b>${index + 1}.</b> ${formatName(parts[0])} - ${parts[1]}</span>
+                    <div class="item-actions">
+                        <button class="btn-edit" onclick="editItem(${index})">Sửa</button>
+                        <button class="btn-delete" onclick="askDelete(${index})">Xóa</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function refreshFormatting() {
+            localStorage.setItem(FORMAT_KEY, document.querySelector('input[name="nameFormat"]:checked').value);
+            localStorage.setItem(ORDER_KEY, document.querySelector('input[name="displayOrder"]:checked').value);
+            renderList();
+            sendUpdate(false);
+        }
+
+        function askDelete(index) {
+            deleteIndexTemp = index;
+            document.getElementById('confirmMessage').innerText = `Xóa: ${donorData[index]}?`;
+            document.getElementById('confirmModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('confirmModal').classList.add('hidden');
+            deleteIndexTemp = null;
+        }
+
+        document.getElementById('btnConfirmDelete').onclick = () => {
+            if (deleteIndexTemp !== null) {
+                donorData.splice(deleteIndexTemp, 1);
+                renderList(); calculateTotal(); sendUpdate(false);
+            }
+            closeModal();
+        };
+
+        function sendUpdate(showAlert = true) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(donorData));
+            localStorage.setItem(FORMAT_KEY, document.querySelector('input[name="nameFormat"]:checked').value);
+            localStorage.setItem(ORDER_KEY, document.querySelector('input[name="displayOrder"]:checked').value);
+            calculateTotal();
+            loadFromStorage();
+            if (showAlert) {
+                const btn = document.querySelector('.btn-update');
+                const old = btn.innerText; btn.innerText = "✅ ĐÃ LƯU!";
+                setTimeout(() => btn.innerText = old, 2000);
+            }
+        }
+
+        function loadFromStorage() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            const savedFormat = localStorage.getItem(FORMAT_KEY) || 'capitalize';
+            const savedOrder = localStorage.getItem(ORDER_KEY) || 'normal';
+            
+            const lines = saved ? JSON.parse(saved) : [];
+            if (!document.getElementById('controlView').classList.contains('hidden')) {
+                donorData = lines; renderList(); calculateTotal();
+            }
+
+            const display = document.getElementById('marqueeDisplay');
+            if (display) {
+                const sep = `<span class="separator-wrap"><span class="rotating-flower">🌸</span></span>`;
+                let displayLines = (savedOrder === 'reverse') ? [...lines].reverse() : lines;
+                display.innerHTML = displayLines.length ? sep + displayLines.map(t => {
+                    const p = t.split(' - ');
+                    return `<span class="donor-name">${formatName(p[0], savedFormat)} - ${p[1]}</span>`;
+                }).join(sep) + sep : "DANH SÁCH ỦNG HỘ";
+                
+                display.style.animation = 'none'; void display.offsetWidth;
+                display.style.animation = `marquee ${Math.max(12, display.offsetWidth / 130)}s linear infinite`;
+            }
+        }
+
+        function openDisplayTab() {
+            sendUpdate(false);
+            window.open(window.location.href.split('#')[0] + '#show', 'tet_show_window');
+        }
+
+        function setViewMode() {
+            const isShow = window.name === 'tet_show_window' || window.location.hash === '#show';
+            if (isShow) {
+                document.getElementById('displayView').classList.remove('hidden');
+                document.getElementById('controlView').classList.add('hidden');
+                loadFromStorage();
+            } else {
+                loadFromStorage();
+            }
+        }
+
+        function exportData() {
+            const blob = new Blob([donorData.join('\n')], {type: 'text/plain'});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob); a.download = 'Danh_Sach.txt'; a.click();
+        }
+
+        function exportToExcel() {
+            let csv = "\uFEFFSTT,Họ tên,Số tiền\n" + donorData.map((item, i) => {
+                const p = item.split(' - ');
+                return `${i+1},"${formatName(p[0])}","${p[1]}"`;
+            }).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob); a.download = 'Danh_Sach_Excel.csv'; a.click();
+        }
+
+        function importData() { document.getElementById('fileImport').click(); }
+        document.getElementById('fileImport').onchange = (e) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                donorData = ev.target.result.split('\n').filter(l => l.trim() !== "");
+                renderList(); calculateTotal(); sendUpdate(false);
+            };
+            reader.readAsText(e.target.files[0]);
+        };
+
+        window.onload = setViewMode;
+    </script>
+</body>
+</html>
