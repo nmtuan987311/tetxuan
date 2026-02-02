@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quản lý Trình Chiếu</title>
+    <title>Quản lý Trình Chiếu Online</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js" type="module"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js" type="module"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js" type="module"></script>
+    
     <style>
         :root {
             --gold: #ffcc00;
@@ -42,7 +47,7 @@
         /* --- VIEW: DISPLAY --- */
         .display-screen {
             background-color: var(--red-deep);
-            background-image: url('background.png');
+            background-image: url('https://images.unsplash.com/photo-1610411541813-f4350993540a?q=80&w=2000&auto=format&fit=crop'); 
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
@@ -274,6 +279,7 @@
         .btn-update { background: #b91c1c; box-shadow: 0 5px 0 #8b0000; }
         .btn-display { background: #f59e0b; box-shadow: 0 5px 0 #d97706; }
 
+        /* Modal */
         .modal-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -302,6 +308,8 @@
         .option-title { font-size: 0.75rem; text-transform: uppercase; color: #9ca3af; font-weight: 800; }
         .radio-label { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; cursor: pointer; font-weight: 600; color: #4b5563; }
         .radio-label input { width: auto; margin: 0; cursor: pointer; }
+
+        .sync-status { font-size: 0.7rem; color: #9ca3af; margin-top: 5px; }
     </style>
 </head>
 <body oncontextmenu="return false;">
@@ -320,7 +328,8 @@
         <div class="card">
             <div class="header-row">
                 <div class="title-group">
-                    <h2>QUẢN LÝ DANH SÁCH</h2>
+                    <h2>QUẢN LÝ DANH SÁCH ONLINE</h2>
+                    <div id="statusLabel" class="sync-status">Đang kết nối server...</div>
                 </div>
                 <div style="display: flex; gap: 8px;">
                     <button onclick="exportToExcel()" style="padding:8px 15px; border-radius:10px; border:none; background:#059669; color:white; cursor:pointer; font-family: var(--system-font); font-weight:600;">📊 Xuất Excel</button>
@@ -379,7 +388,7 @@
             </div>
 
             <div class="btn-group-main">
-                <button onclick="sendUpdate()" class="btn-large btn-update">🚀 CẬP NHẬT</button>
+                <button onclick="sendUpdate()" class="btn-large btn-update">🚀 CẬP NHẬT ONLINE</button>
                 <button onclick="openDisplayTab()" class="btn-large btn-display">📺 TRÌNH CHIẾU</button>
             </div>
 
@@ -399,48 +408,61 @@
         </div>
     </div>
 
-    <script>
-        const STORAGE_KEY = 'tet_final_config';
-        const FORMAT_KEY = 'tet_name_format';
-        const ORDER_KEY = 'tet_display_order';
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+        import { getFirestore, doc, onSnapshot, setDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+
+        // --- Cấu hình Firebase ---
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'tet-2026-marquee';
+
+        // --- Biến toàn cục ---
         let donorData = []; 
         let deleteIndexTemp = null;
+        let currentUser = null;
 
-        function toTitleCase(str) {
+        // --- Các hàm Format ---
+        window.toTitleCase = function(str) {
             return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         }
 
-        function formatName(name, overrideFormat = null) {
+        window.formatName = function(name, overrideFormat = null) {
             let format = overrideFormat || document.querySelector('input[name="nameFormat"]:checked').value;
             return (format === 'uppercase') ? name.toUpperCase() : toTitleCase(name);
         }
 
-        function formatWithCommas(value) {
+        window.formatWithCommas = function(value) {
             let number = value.toString().replace(/\D/g, '');
             return number ? parseInt(number).toLocaleString('en-US') : "";
         }
 
-        function handleCustomAmountInput(input) {
+        window.handleCustomAmountInput = function(input) {
             input.value = formatWithCommas(input.value);
         }
 
-        function toggleCustomInput() {
+        window.toggleCustomInput = function() {
             const select = document.getElementById('amountSelect');
             const custom = document.getElementById('customAmount');
             custom.disabled = select.value !== "CUSTOM";
             if (!custom.disabled) custom.focus();
         }
 
-        function calculateTotal() {
+        window.calculateTotal = function() {
             let total = 0;
             donorData.forEach(item => {
                 const parts = item.split(' - ');
                 if (parts.length > 1) total += parseInt(parts[1].replace(/\D/g, '')) || 0;
             });
-            document.getElementById('totalAmountDisplay').innerText = total.toLocaleString('en-US') + 'đ';
+            const display = document.getElementById('totalAmountDisplay');
+            if (display) display.innerText = total.toLocaleString('en-US') + 'đ';
         }
 
-        function addItem() {
+        // --- Logic Xử lý Dữ liệu ---
+        window.addItem = function() {
             const nameField = document.getElementById('nameInput');
             const name = nameField.value.trim();
             const selectValue = document.getElementById('amountSelect').value;
@@ -458,19 +480,16 @@
             nameField.focus();
         }
 
-        function editItem(index) {
+        window.editItem = function(index) {
             const item = donorData[index];
             const parts = item.split(' - ');
             const name = parts[0];
             const amount = parts[1];
 
-            // Đưa dữ liệu lên ô nhập
             document.getElementById('nameInput').value = name;
-            
             const select = document.getElementById('amountSelect');
             const custom = document.getElementById('customAmount');
             
-            // Kiểm tra xem số tiền có trong list không
             let found = false;
             for(let i=0; i<select.options.length; i++) {
                 if(select.options[i].value === amount) {
@@ -489,15 +508,15 @@
                 custom.value = "";
             }
 
-            // Xóa mục cũ để chuẩn bị lưu đè
             donorData.splice(index, 1);
             renderList();
             calculateTotal();
             document.getElementById('nameInput').focus();
         }
 
-        function renderList() {
+        window.renderList = function() {
             const container = document.getElementById('donorList');
+            if(!container) return;
             container.innerHTML = donorData.map((item, index) => {
                 const parts = item.split(' - ');
                 return `
@@ -511,20 +530,18 @@
             }).join('');
         }
 
-        function refreshFormatting() {
-            localStorage.setItem(FORMAT_KEY, document.querySelector('input[name="nameFormat"]:checked').value);
-            localStorage.setItem(ORDER_KEY, document.querySelector('input[name="displayOrder"]:checked').value);
+        window.refreshFormatting = function() {
             renderList();
             sendUpdate(false);
         }
 
-        function askDelete(index) {
+        window.askDelete = function(index) {
             deleteIndexTemp = index;
             document.getElementById('confirmMessage').innerText = `Xóa: ${donorData[index]}?`;
             document.getElementById('confirmModal').classList.remove('hidden');
         }
 
-        function closeModal() {
+        window.closeModal = function() {
             document.getElementById('confirmModal').classList.add('hidden');
             deleteIndexTemp = null;
         }
@@ -537,66 +554,127 @@
             closeModal();
         };
 
-        function sendUpdate(showAlert = true) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(donorData));
-            localStorage.setItem(FORMAT_KEY, document.querySelector('input[name="nameFormat"]:checked').value);
-            localStorage.setItem(ORDER_KEY, document.querySelector('input[name="displayOrder"]:checked').value);
-            calculateTotal();
-            loadFromStorage();
-            if (showAlert) {
-                const btn = document.querySelector('.btn-update');
-                const old = btn.innerText; btn.innerText = "✅ ĐÃ LƯU!";
-                setTimeout(() => btn.innerText = old, 2000);
-            }
-        }
-
-        function loadFromStorage() {
-            const saved = localStorage.getItem(STORAGE_KEY);
-            const savedFormat = localStorage.getItem(FORMAT_KEY) || 'capitalize';
-            const savedOrder = localStorage.getItem(ORDER_KEY) || 'normal';
+        // --- ĐỒNG BỘ FIREBASE (RULE 3 & RULE 1) ---
+        window.sendUpdate = async function(showAlert = true) {
+            if (!currentUser) return;
             
-            const lines = saved ? JSON.parse(saved) : [];
-            if (!document.getElementById('controlView').classList.contains('hidden')) {
-                donorData = lines; renderList(); calculateTotal();
-            }
+            const config = {
+                data: donorData,
+                format: document.querySelector('input[name="nameFormat"]:checked').value,
+                order: document.querySelector('input[name="displayOrder"]:checked').value,
+                timestamp: Date.now()
+            };
 
-            const display = document.getElementById('marqueeDisplay');
-            if (display) {
-                const sep = `<span class="separator-wrap"><span class="rotating-flower">🌸</span></span>`;
-                let displayLines = (savedOrder === 'reverse') ? [...lines].reverse() : lines;
-                display.innerHTML = displayLines.length ? sep + displayLines.map(t => {
-                    const p = t.split(' - ');
-                    return `<span class="donor-name">${formatName(p[0], savedFormat)} - ${p[1]}</span>`;
-                }).join(sep) + sep : "DANH SÁCH ỦNG HỘ";
-                
-                display.style.animation = 'none'; void display.offsetWidth;
-                display.style.animation = `marquee ${Math.max(12, display.offsetWidth / 130)}s linear infinite`;
+            try {
+                // Đảm bảo đường dẫn chẵn segments: artifacts/{appId}/public/data/tet_config/settings
+                const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'tet_config', 'settings');
+                await setDoc(docRef, config);
+
+                if (showAlert) {
+                    const btn = document.querySelector('.btn-update');
+                    if (btn) {
+                        const old = btn.innerText; btn.innerText = "✅ ĐÃ ĐỒNG BỘ!";
+                        setTimeout(() => btn.innerText = old, 2000);
+                    }
+                }
+            } catch (error) {
+                console.error("Lỗi gửi dữ liệu:", error);
             }
         }
 
-        function openDisplayTab() {
+        window.loadOnlineData = function() {
+            if (!currentUser) return;
+            
+            // Đảm bảo đường dẫn chẵn segments
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'tet_config', 'settings');
+            
+            onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const online = docSnap.data();
+                    const savedFormat = online.format || 'capitalize';
+                    const savedOrder = online.order || 'normal';
+                    const lines = online.data || [];
+
+                    // Cập nhật cho màn hình quản lý
+                    const controlView = document.getElementById('controlView');
+                    if (controlView && !controlView.classList.contains('hidden')) {
+                        donorData = lines;
+                        const formatRadio = document.querySelector(`input[name="nameFormat"][value="${savedFormat}"]`);
+                        if (formatRadio) formatRadio.checked = true;
+                        
+                        const orderRadio = document.querySelector(`input[name="displayOrder"][value="${savedOrder}"]`);
+                        if (orderRadio) orderRadio.checked = true;
+                        
+                        renderList();
+                        calculateTotal();
+                    }
+
+                    // Cập nhật cho màn hình trình chiếu
+                    const display = document.getElementById('marqueeDisplay');
+                    if (display) {
+                        const sep = `<span class="separator-wrap"><span class="rotating-flower">🌸</span></span>`;
+                        let displayLines = (savedOrder === 'reverse') ? [...lines].reverse() : lines;
+                        
+                        display.innerHTML = displayLines.length ? sep + displayLines.map(t => {
+                            const p = t.split(' - ');
+                            return `<span class="donor-name">${formatName(p[0], savedFormat)} - ${p[1]}</span>`;
+                        }).join(sep) + sep : "CHÚC MỪNG NĂM MỚI 2026";
+                        
+                        display.style.animation = 'none'; void display.offsetWidth;
+                        display.style.animation = `marquee ${Math.max(12, display.offsetWidth / 130)}s linear infinite`;
+                    }
+                    const statusLabel = document.getElementById('statusLabel');
+                    if (statusLabel) statusLabel.innerText = "Đã đồng bộ: " + new Date().toLocaleTimeString();
+                }
+            }, (err) => {
+                console.error("Lỗi lắng nghe Firestore:", err);
+                const statusLabel = document.getElementById('statusLabel');
+                if (statusLabel) statusLabel.innerText = "Lỗi quyền truy cập hoặc mất kết nối!";
+            });
+        }
+
+        window.openDisplayTab = function() {
             sendUpdate(false);
             window.open(window.location.href.split('#')[0] + '#show', 'tet_show_window');
         }
 
-        function setViewMode() {
-            const isShow = window.name === 'tet_show_window' || window.location.hash === '#show';
-            if (isShow) {
-                document.getElementById('displayView').classList.remove('hidden');
-                document.getElementById('controlView').classList.add('hidden');
-                loadFromStorage();
-            } else {
-                loadFromStorage();
+        // --- KHỞI TẠO (RULE 3) ---
+        async function initApp() {
+            try {
+                // Xác thực ưu tiên Custom Token trước khi dùng Anonymous (RULE 3)
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    currentUser = user;
+                    if (user) {
+                        const isShow = window.name === 'tet_show_window' || window.location.hash === '#show';
+                        if (isShow) {
+                            document.getElementById('displayView').classList.remove('hidden');
+                            document.getElementById('controlView').classList.add('hidden');
+                        }
+                        // Chỉ tải dữ liệu khi đã xác thực xong
+                        loadOnlineData();
+                    }
+                });
+            } catch (e) {
+                console.error("Lỗi khởi tạo hệ thống xác thực:", e);
+                const statusLabel = document.getElementById('statusLabel');
+                if (statusLabel) statusLabel.innerText = "Lỗi xác thực hệ thống!";
             }
         }
 
-        function exportData() {
+        // --- File Export/Import ---
+        window.exportData = function() {
             const blob = new Blob([donorData.join('\n')], {type: 'text/plain'});
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob); a.download = 'Danh_Sach.txt'; a.click();
         }
 
-        function exportToExcel() {
+        window.exportToExcel = function() {
             let csv = "\uFEFFSTT,Họ tên,Số tiền\n" + donorData.map((item, i) => {
                 const p = item.split(' - ');
                 return `${i+1},"${formatName(p[0])}","${p[1]}"`;
@@ -606,17 +684,24 @@
             a.href = URL.createObjectURL(blob); a.download = 'Danh_Sach_Excel.csv'; a.click();
         }
 
-        function importData() { document.getElementById('fileImport').click(); }
-        document.getElementById('fileImport').onchange = (e) => {
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                donorData = ev.target.result.split('\n').filter(l => l.trim() !== "");
-                renderList(); calculateTotal(); sendUpdate(false);
+        window.importData = function() { 
+            const fileInput = document.getElementById('fileImport');
+            if (fileInput) fileInput.click(); 
+        }
+        
+        const fileImportEl = document.getElementById('fileImport');
+        if (fileImportEl) {
+            fileImportEl.onchange = (e) => {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    donorData = ev.target.result.split('\n').filter(l => l.trim() !== "");
+                    renderList(); calculateTotal(); sendUpdate(false);
+                };
+                reader.readAsText(e.target.files[0]);
             };
-            reader.readAsText(e.target.files[0]);
-        };
+        }
 
-        window.onload = setViewMode;
+        window.onload = initApp;
     </script>
 </body>
 </html>
